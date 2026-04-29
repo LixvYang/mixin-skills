@@ -1,0 +1,39 @@
+# Operating system
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.iml
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+keystore.json
+*.keystore.json
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+dist/
+build/
+.turbo/
+
+# Local working artifacts (see CONTRIBUTING for the canonical layout)
+findings.md
+progress.md
+task_plan.md
