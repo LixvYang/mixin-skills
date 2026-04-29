@@ -26,7 +26,7 @@ Mixin Safe Computer (MVM) is a decentralized compute layer inside Mixin Safe. It
 
 This skill covers layers 1 and 2. The MTG worker side (running a Computer node) is implemented in `github.com/MixinNetwork/computer` and uses [`mixin-mtg-multisig`](../mixin-mtg-multisig/SKILL.md) patterns.
 
-> **Go-only.** All helpers documented here live in `github.com/MixinNetwork/bot-api-go-client/v3`. The Node.js SDK has no Computer wrapper; a Node.js client would have to construct Mixin Safe transactions to the Computer MTG and encode extras manually.
+> **SDK note.** The Go SDK (`github.com/MixinNetwork/bot-api-go-client/v3`) contains both HTTP wrappers for `https://computer.mixin.one` and helpers for encoding MTG extras. The Node.js SDK (`@mixin.dev/mixin-node-sdk`) currently exposes **encoding helpers** (extra layout + MTG extra encoding + size check) but does not provide first-class HTTP wrappers for `computer.mixin.one` endpoints — call those endpoints directly (axios/fetch) if needed.
 
 ## Operation byte layouts
 
@@ -58,6 +58,25 @@ extra := bot.EncodeMtgExtra(info.Members.AppId, memo)  // base64 raw URL
 sys, _ := bot.BuildSystemCallExtra(uid, callID, skipProcess, feeID)
 memo   := bot.EncodeOperationMemo(bot.OperationTypeSystemCall, sys)
 extra  := bot.EncodeMtgExtra(info.Members.AppId, memo)
+```
+
+Node.js equivalents (encoding only) live in `@mixin.dev/mixin-node-sdk` utils:
+
+```js
+const { buildComputerExtra, buildSystemCallExtra, encodeMtgExtra, checkSystemCallSize, OperationTypeAddUser, OperationTypeSystemCall } =
+  require('@mixin.dev/mixin-node-sdk/dist/client/utils');
+
+// OperationTypeAddUser: payload is UTF-8 MIX address bytes
+const memo = buildComputerExtra(OperationTypeAddUser, Buffer.from(mixAddr, 'utf8'));
+const mtgExtra = encodeMtgExtra(mtgAppId, memo); // base64 raw URL
+
+// OperationTypeSystemCall: uid(8 bytes) || callID(16) || skip(1) || feeID?(16)
+const sys = buildSystemCallExtra(uid /* decimal string */, callID /* uuid */, skipPostProcess, feeID /* optional uuid */);
+const memo2 = buildComputerExtra(OperationTypeSystemCall, sys);
+const mtgExtra2 = encodeMtgExtra(mtgAppId, memo2);
+
+// bytes of Solana tx: Buffer.from(tx.serialize())
+if (!checkSystemCallSize(solanaTxBytes)) throw new Error('Solana tx too large for Computer system call');
 ```
 
 ## UUID vs MIX address — pay attention
@@ -180,6 +199,7 @@ A locked nonce account is consumed by exactly one system call. Lock immediately 
 ## Reference
 
 - `github.com/MixinNetwork/bot-api-go-client/v3/computer.go` — all the helpers above (`OperationTypeAddUser`, `OperationTypeSystemCall`, `OperationTypeUserDeposit`, `EncodeOperationMemo`, `EncodeMtgExtra`, `BuildSystemCallExtra`, `RegisterComputer`, `GetComputerInfo`, `GetComputerUser`, `GetComputerDeployedAssets`, `GetComputerSystemCall`, `GetFeeOnXINBasedOnSOL`, `ComputerDeployExternalAsset`, `LockComputerNonceAccount`, `ComputerUserIDToBytes`).
+- `MixinNetwork/bot-api-nodejs-client/src/client/utils/computer.ts` — Node.js encoding helpers (`OperationTypeAddUser`, `OperationTypeSystemCall`, `OperationTypeUserDeposit`, `MAX_SOLANA_TX_SIZE`, `checkSystemCallSize`, `userIdToBytes`, `buildSystemCallExtra`, `buildComputerExtra`, `encodeMtgExtra`).
 - `github.com/MixinNetwork/computer` — full MTG-side runtime; the canonical reference for what a Computer node actually does with these extras.
 - https://mvm.dev/register — Computer registration UI documentation.
 

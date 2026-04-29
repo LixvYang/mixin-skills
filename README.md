@@ -26,7 +26,7 @@ Each skill lives under `skills/<skill-name>/SKILL.md` and is loaded contextually
 | [`mixin-withdrawals`](skills/mixin-withdrawals/SKILL.md) | withdrawal, fee, deposit entry, address book, MixinCashier | On-chain withdrawal, fee output, deposit, address book |
 | [`mixin-mix-address`](skills/mixin-mix-address/SKILL.md) | MIX address, MIN invoice, MTG extra, mixin:// scheme | Address encoding, invoices, URL schemes |
 | [`mixin-network-assets`](skills/mixin-network-assets/SKILL.md) | asset, snapshot, network ticker, top assets, asset search | Public asset/snapshot/ticker APIs |
-| [`mixin-computer`](skills/mixin-computer/SKILL.md) | Mixin Computer, MVM, OperationTypeAddUser, OperationTypeSystemCall, RegisterComputer, GetComputerInfo, system call, nonce account | Public Computer client + AddUser / SystemCall extras (Go) |
+| [`mixin-computer`](skills/mixin-computer/SKILL.md) | Mixin Computer, MVM, OperationTypeAddUser, OperationTypeSystemCall, RegisterComputer, GetComputerInfo, system call, nonce account | Public Computer client (Go) + AddUser / SystemCall extras (Go + Node.js encoding utils) |
 | [`mixin-mtg-multisig`](skills/mixin-mtg-multisig/SKILL.md) | MTG, mtg.Group, observer, signer, FROST, multi-party-sig, replay check | MTG programs, observer/signer, MPC sessions (Go) |
 | [`mixin-kit-go`](skills/mixin-kit-go/SKILL.md) | mixin-kit-go, ClientWrapper, TransferOne, TransferMany, Web3Quote, Web3Swap, ComputerClient | DomeLiquid kit wrapper (Go) |
 
@@ -106,7 +106,7 @@ mixin-skills/
     └── mixin-kit-go/SKILL.md
 ```
 
-Most SKILL.md files cover both Go and Node.js. `mixin-computer`, `mixin-mtg-multisig`, and `mixin-kit-go` are Go-only.
+Most SKILL.md files cover both Go and Node.js. `mixin-mtg-multisig` and `mixin-kit-go` are Go-only. `mixin-computer` covers Go end-to-end, plus Node.js helpers for encoding Computer extras.
 
 ## Source references
 
