@@ -27,7 +27,7 @@ Blaze is the bot's inbox: a single long-lived WebSocket at `wss://blaze.mixin.on
 | Inbound | Trigger |
 |---------|---------|
 | user message | another user / group sent to the bot's conversation |
-| `SYSTEM_ACCOUNT_SNAPSHOT` | bot received a legacy transfer (use `/snapshots` instead — see [`mixin-network-assets`](../mixin-network-assets/SKILL.md)) |
+| `SYSTEM_ACCOUNT_SNAPSHOT` | bot received a legacy transfer (for Safe transfers, poll `/safe/snapshots` instead — see [`mixin-network-assets`](../mixin-network-assets/SKILL.md)) |
 | `SYSTEM_CONVERSATION` | a group's membership changed |
 | `ACKNOWLEDGE_MESSAGE_RECEIPT` | another participant read a message the bot sent |
 
@@ -113,7 +113,7 @@ const handler = {
   onAckReceipt: async (msg) => {
     // msg.status === 'READ' | 'DELIVERED'
   },
-  // SYSTEM_ACCOUNT_SNAPSHOT — legacy transfers. Prefer polling /safe/snapshots.
+  // SYSTEM_ACCOUNT_SNAPSHOT — legacy transfers. For Safe activity, poll /safe/snapshots.
   onTransfer: async (msg) => { /* ... */ },
   // SYSTEM_CONVERSATION — group membership changed.
   onConversation: async (msg) => {
@@ -137,7 +137,7 @@ Both SDKs let you call message helpers from the handler. Replies travel over the
 - **Forgetting to base64-decode.** Go does not decode `msg.Data` for you; Node only decodes when `blazeOptions.parse === true`.
 - **Rotating message IDs in retries.** Reuse the original `message_id` when resending; the server dedupes.
 - **Treating `ACKNOWLEDGE_MESSAGE_RECEIPT` as a delivery confirmation for outbound messages.** It tells you another participant *read* a message; the bot's own outbound delivery is confirmed by REST `2xx`.
-- **Trusting `SYSTEM_ACCOUNT_SNAPSHOT` for new code.** It only fires for legacy transfers. New code should poll `/safe/snapshots` (see [`mixin-network-assets`](../mixin-network-assets/SKILL.md)).
+- **Trusting `SYSTEM_ACCOUNT_SNAPSHOT` for Safe activity.** It only fires for legacy transfers. Ordinary Safe clients should poll `/safe/snapshots` for balance changes; MTG workers consume `/safe/outputs` instead (see [`mixin-network-assets`](../mixin-network-assets/SKILL.md)).
 - **Logging full payloads.** Messages can include private text, asset balances, etc. Redact before logging.
 
 ## Validation

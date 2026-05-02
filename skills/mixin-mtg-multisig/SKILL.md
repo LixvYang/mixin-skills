@@ -15,7 +15,7 @@ For client code that only calls the public Mixin Computer HTTP API, use [`mixin-
 
 An **MTG (Mixin Trusted Group)** is a fixed `(members, threshold, epoch)` tuple that runs a deterministic worker. Every MTG node:
 
-1. Subscribes to Mixin outputs addressed to the group's MIX address.
+1. Polls Mixin Safe outputs addressed to the group's MIX address (`/safe/outputs`, ordered by `sequence`).
 2. Decodes each output's `extra` to find which app + which operation.
 3. Runs the matching app's `ProcessOutput` handler **deterministically** — same inputs, same state, same transactions emitted.
 4. Cooperates with peer nodes via a messenger network for MPC signing of any transactions the worker produces.
@@ -23,7 +23,7 @@ An **MTG (Mixin Trusted Group)** is a fixed `(members, threshold, epoch)` tuple 
 The `mtg.Group` worker abstraction enforces this: it persists its own checkpoint, replays on restart, and uses `mtg.ReplayCheck` to verify that two parallel runs of the same action produce the same transactions.
 
 ```
-   Mixin outputs ──► mtg.Group ──► AttachWorker(appID, worker)
+   /safe/outputs ──► mtg.Group ──► AttachWorker(appID, worker)
                          │              │
                          │              ▼
                          │      ProcessOutput(out, extra)
@@ -90,6 +90,13 @@ Setup procedure:
 3. Read the app config struct and the example config file before changing thresholds, members, stores, or keys.
 4. Find the `mtg.Group` worker implementation and its `ProcessOutput` / action handler.
 5. Find persistence boundaries: MTG store, wallet store, app store, session/signature tables, checkpoints.
+
+## Outputs, snapshots, and transactions
+
+- MTG input stream: `/safe/outputs` for the group `(members, threshold)`, ordered by Sequencer `sequence`.
+- User-facing activity: `/safe/snapshots` for balance changes and account history; do not drive MTG consensus from snapshots.
+- Submitted transaction state: `/safe/transactions/:id` to confirm `signed` / `spent` and read `snapshot_hash` after broadcasting.
+- External-chain facts: observers read external systems, then commit those facts back as Mixin group transactions before deterministic workers consume them.
 
 ## Architecture pattern
 

@@ -104,7 +104,7 @@ const me = await client.user.profile();
 | On-chain withdrawal, fee output, address book, deposit entry | [`mixin-withdrawals`](../mixin-withdrawals/SKILL.md) |
 | Encode/decode `MIX...` address, `MIN...` invoice, `mixin://` URL | [`mixin-mix-address`](../mixin-mix-address/SKILL.md) |
 | Asset / snapshot / network ticker queries | [`mixin-network-assets`](../mixin-network-assets/SKILL.md) |
-| Mixin Computer (MVM): RegisterComputer, system calls, deployed assets | [`mixin-computer`](../mixin-computer/SKILL.md) — Go only |
+| Mixin Computer (MVM): RegisterComputer, system calls, deployed assets | [`mixin-computer`](../mixin-computer/SKILL.md) — Go end-to-end, Node.js extra encoding helpers |
 | MTG group / observer / signer / FROST | [`mixin-mtg-multisig`](../mixin-mtg-multisig/SKILL.md) — Go only |
 | `mixin-kit-go` ClientWrapper / Web3 / Computer | [`mixin-kit-go`](../mixin-kit-go/SKILL.md) — Go only |
 

@@ -52,7 +52,7 @@ Use `client.network.*` / `bot.Network*` whenever a session-scoped balance isn't 
 
 ## Safe outputs and balance
 
-`outputs` are unspent UTXOs the (members, threshold) pair owns. `balance` is the sum.
+`outputs` are the current UTXO set owned by a `(members, threshold)` pair. Use `/safe/outputs` when you need spendable inputs, balance reconstruction, or an ordered stream of group-addressed outputs for MTG-style processing. The `offset` cursor is the Sequencer output `sequence`, not a timestamp.
 
 ```js
 const outputs = await client.utxo.safeOutputs({
@@ -70,9 +70,9 @@ outputs, _ := bot.ListUnspentOutputs(ctx, "", []string{su.UserId}, 1, assetID, 0
 
 For UTXO selection rules, see [`mixin-safe-transactions`](../mixin-safe-transactions/SKILL.md).
 
-## Safe snapshots — what landed in your account
+## Safe snapshots — balance changes
 
-A snapshot is a record of an output you received. Polling `/safe/snapshots` is the *recommended* way to detect inbound transfers (preferred over the legacy Blaze `SYSTEM_ACCOUNT_SNAPSHOT`).
+A snapshot is a record of a balance-changing event. For ordinary bots and clients, polling `/safe/snapshots` is the recommended way to detect inbound transfers or reconcile account activity (preferred over the legacy Blaze `SYSTEM_ACCOUNT_SNAPSHOT`). This is distinct from MTG worker processing: group programs consume `/safe/outputs` by sequence and use snapshots/transaction state only to confirm their own submitted transactions.
 
 ```js
 const snaps = await client.safe.fetchSafeSnapshots({
@@ -91,6 +91,23 @@ snaps, _ := bot.SafeSnapshotsRead(ctx, assetID, opponentID, cursor, "DESC", 100,
 
 Persist the latest `created_at` cursor and resume from there. Snapshots include the kernel `transaction_hash` so you can correlate with your own outgoing transactions.
 
+## Single-bot deposit worker pattern
+
+For a centralized bot or backend service (not MTG), make deposits snapshot-driven:
+
+1. Create a `MIN...` invoice or payment request with a stable UUID `trace_id` / `request_id` and an application memo.
+2. Run a background worker that polls `/safe/snapshots` with the bot `app` parameter and a persisted RFC3339Nano time cursor.
+3. Ignore non-positive amounts and unsupported assets; decode the memo and map the snapshot to the intended order/deposit.
+4. Store `snapshot_id`, `request_id`, `trace_id`, `opponent_id`, `asset_id`, amount, memo, and status in your database with unique constraints on `snapshot_id` and `trace_id`.
+5. Process each snapshot idempotently. If business processing fails after receiving funds, create a refund/withdrawal task with a deterministic Safe transfer request ID.
+6. For outbound transfers, build and submit a Safe transaction, then poll `/safe/transactions/:id` until state is `spent`.
+
+Use `/safe/outputs` in this architecture only when the bot needs spendable UTXOs for outgoing Safe transfers or local balance reconstruction. Do not poll `/safe/outputs` as the ordinary deposit event feed for a single bot.
+
+## Safe transactions — submitted transfer state
+
+Use `/safe/transactions/:id` after broadcasting a Safe transaction to read the request state (`signed` or `spent`) plus `snapshot_hash` / `snapshot_at` when the transaction has landed. Do not use snapshots as the source of spendable inputs; use `/safe/outputs` for UTXO selection.
+
 ### Notify a snapshot
 
 To attach a memo / message to a specific received snapshot (e.g. credit confirmation), call `safe.notifySnapshot`:
@@ -108,3 +125,4 @@ err := bot.SafeSnapshotNotify(ctx, snapshotID, message, su)
 - For polling snapshots, wrap the cursor in your own persistence (DB row), not in-memory state, so a restart resumes correctly.
 - For network/ticker calls, cache responses; ticker is per-day stable.
 - For balance, sum outputs locally and compare against `safeAssetBalance` to catch stale local state.
+- For MTG or Computer-style services, process `/safe/outputs` by monotonically increasing `sequence`; snapshots are for user-visible activity history and transaction confirmation.
