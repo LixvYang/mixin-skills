@@ -136,6 +136,128 @@ Internally `bot.RegisterComputer`:
 
 The resulting MTG sees an output with the AddUser memo and registers the user on Solana. Use `bot.GetComputerUser(ctx, mix)` to poll until `uid` and `solana_address` are populated.
 
+### Node.js registration shape
+
+In Node.js, do the same registration manually: load the bot keystore, fetch Computer info, derive the bot's 1-of-1 MIX address, check whether it is already registered, then send the Computer AddUser payment from the bot's XIN balance.
+
+```ts
+import {
+  MixinApi,
+  buildComputerExtra,
+  encodeMtgExtra,
+  buildMixAddress,
+  buildSafeTransactionRecipient,
+  OperationTypeAddUser,
+} from "@mixin.dev/mixin-node-sdk";
+import BigNumber from "bignumber.js";
+
+const POLL_INTERVAL_MS = 5_000;
+const POLL_TIMEOUT_MS = 120_000;
+
+const ks = loadKeystore();
+const client = MixinApi({
+  keystore: {
+    app_id: ks.app_id,
+    session_id: ks.session_id,
+    session_private_key: ks.session_private_key,
+    server_public_key: ks.server_public_key,
+  },
+});
+
+const info = await computerApi.info();
+
+const mixAddress = buildMixAddress({
+  version: 2,
+  xinMembers: [],
+  uuidMembers: [ks.app_id],
+  threshold: 1,
+});
+
+try {
+  const existing = await computerApi.user(mixAddress);
+  if (existing?.id) {
+    return existing;
+  }
+} catch {
+  // 404 means not registered yet.
+}
+```
+
+Build the AddUser extra from the bot's MIX address and pay the Computer MTG group:
+
+```ts
+const memo = buildComputerExtra(
+  OperationTypeAddUser,
+  Buffer.from(mixAddress, "utf-8")
+);
+const extra = Buffer.from(encodeMtgExtra(info.members.app_id, memo), "utf-8");
+
+const mtgRecipient = buildSafeTransactionRecipient(
+  info.members.members,
+  info.members.threshold,
+  info.params.operation.price
+);
+```
+
+Before sending, check the bot has enough XIN UTXOs for `info.params.operation.price`:
+
+```ts
+const outputs = await client.utxo.safeOutputs({
+  members: [ks.app_id],
+  threshold: 1,
+  asset: info.params.operation.asset,
+  state: "unspent",
+});
+
+const balance = outputs.reduce(
+  (sum, output) => sum.plus(output.amount),
+  new BigNumber(0)
+);
+
+if (balance.lt(info.params.operation.price)) {
+  throw new Error(`Insufficient XIN for Computer registration`);
+}
+```
+
+Send the Safe transaction with the bot spend key. The exact `sendSafeTx` helper is project-specific, but it must build, verify, sign, and submit a normal Safe transaction with the AddUser extra:
+
+```ts
+const txHash = await sendSafeTx(
+  client,
+  ks.spend_key,
+  ks.app_id,
+  info.params.operation.asset,
+  [mtgRecipient],
+  extra
+);
+```
+
+After submission, poll `GET /users/:mix` until Computer returns the UID and Solana authority:
+
+```ts
+const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+while (Date.now() < deadline) {
+  await sleep(POLL_INTERVAL_MS);
+
+  try {
+    const user = await computerApi.user(mixAddress);
+    if (user?.id) {
+      return {
+        uid: user.id,
+        mix: user.mix_address,
+        solana: user.chain_address,
+        registrationTx: txHash,
+      };
+    }
+  } catch {
+    // The MTG has not processed the registration yet.
+  }
+}
+
+throw new Error("Timed out waiting for Computer registration");
+```
+
 ## Submit a system call
 
 A "system call" is a Solana transaction proxied through the Computer MTG. Full flow:
@@ -162,6 +284,141 @@ raw, _    := bot.BuildSafeTransaction(/* utxos */, []*bot.TransactionRecipient{
 ```
 
 The `skipProcess` flag (1 byte) tells the MTG worker not to broadcast the resulting Solana tx — useful for dry-run / pre-validation.
+
+### Use case: bot-paid invoice-style system call
+
+Use this shape when a backend bot already has a serialized Solana transaction and should pay Computer directly through Mixin Safe. Do not send one plain Safe transaction with `extra = systemCallExtra` and two ordinary outputs. The reliable shape is invoice-style:
+
+1. A storage entry that stores the serialized Solana transaction bytes.
+2. A system-call fee entry whose `extra` is the Computer system-call payload.
+3. A reference from the fee entry to the storage entry.
+
+Build the Solana transaction for Computer execution:
+
+```ts
+const nonce = await computerApi.getNonce(botMix);
+const computerPayer = new PublicKey(info.payer);
+
+const nonceAdvanceIx = SystemProgram.nonceAdvance({
+  noncePubkey: new PublicKey(nonce.nonce_address),
+  authorizedPubkey: computerPayer,
+});
+
+const messageV0 = new TransactionMessage({
+  payerKey: computerPayer,
+  recentBlockhash: nonce.nonce_hash,
+  instructions: [nonceAdvanceIx, ...instructions],
+}).compileToV0Message(addressLookupTables);
+
+const tx = new VersionedTransaction(messageV0);
+const txBuf = Buffer.from(tx.serialize());
+const callId = uniqueConversationID(txBuf.toString("hex"), "system call");
+```
+
+If Computer must fund SOL for rent or execution, quote the exact top-up before building the Computer extra. Include enough SOL for both the new account rent and any balance the Computer-controlled authority must keep after execution:
+
+```ts
+const rentLamports = BigInt(
+  await connection.getMinimumBalanceForRentExemption(accountSize)
+);
+const authorityReserveLamports = BigInt(
+  await connection.getMinimumBalanceForRentExemption(0)
+);
+const requiredAuthorityLamports = rentLamports + authorityReserveLamports;
+const currentAuthorityLamports = BigInt(
+  await connection.getBalance(authority, "confirmed")
+);
+const topUpLamports =
+  requiredAuthorityLamports > currentAuthorityLamports
+    ? requiredAuthorityLamports - currentAuthorityLamports
+    : 0n;
+
+const fee = topUpLamports > 0n
+  ? await computerApi.getFee(lamportsToSol(topUpLamports))
+  : undefined;
+```
+
+Put the Computer extra on the system-call fee entry, not on the outer payment envelope:
+
+```ts
+const callPayload = buildSystemCallExtra(
+  computerUser.id,
+  callId,
+  false,
+  fee?.fee_id
+);
+const computerExtra = buildComputerExtra(OperationTypeSystemCall, callPayload);
+const encodedExtra = encodeMtgExtra(computerInfo.members.app_id, computerExtra);
+const extraBuf = Buffer.from(encodedExtra, "utf-8");
+```
+
+Build the invoice with storage first and the system-call entry second. The `index_references: [0]` link is what tells Computer which storage transaction contains the Solana transaction bytes:
+
+```ts
+const computerRecipient = buildMixAddress({
+  version: 2,
+  xinMembers: [],
+  uuidMembers: computerInfo.members.members,
+  threshold: computerInfo.members.threshold,
+});
+
+const invoice = newMixinInvoice(computerRecipient);
+if (!invoice) throw new Error("Failed to build Computer invoice");
+
+attachStorageEntry(invoice, uniqueConversationID(callId, "storage"), txBuf);
+
+const totalXin = new BigNumber(computerInfo.params.operation.price)
+  .plus(fee?.xin_amount ?? "0")
+  .toFixed(8, BigNumber.ROUND_CEIL);
+
+attachInvoiceEntry(invoice, {
+  trace_id: callId,
+  asset_id: XINAssetID,
+  amount: totalXin,
+  extra: extraBuf,
+  index_references: [0],
+  hash_references: [],
+});
+```
+
+When paying the entries programmatically, submit them in order and convert invoice index references into actual Safe transaction hashes. Storage entries use the storage recipient derived from their own `extra`; the system-call entry pays the Computer MTG MIX address:
+
+```ts
+const txHashes: string[] = [];
+
+for (const [index, entry] of invoice.entries.entries()) {
+  const recipient = isStorageEntry(entry)
+    ? getRecipientForStorage(entry.extra)
+    : {
+        mixAddress: invoice.recipient,
+        amount: entry.amount,
+      };
+
+  const references = [
+    ...entry.hash_references,
+    ...entry.index_references.map((ref) => {
+      const hash = txHashes[ref];
+      if (!hash) {
+        throw new Error(`Invoice entry ${index} references unpaid entry ${ref}`);
+      }
+      return hash;
+    }),
+  ];
+
+  const hash = await sendSafeTx(
+    client,
+    spendKey,
+    senderUserId,
+    entry.asset_id,
+    [recipient],
+    entry.extra,
+    references
+  );
+  txHashes.push(hash);
+}
+```
+
+If one XIN UTXO pays the storage entry, its change output may not be immediately spendable for the fee entry. Retry `insufficient total input outputs` for a short bounded window before treating it as fatal.
 
 ## Deploy external assets
 
