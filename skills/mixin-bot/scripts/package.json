@@ -1,0 +1,10 @@
+{
+  "name": "mixin-bot-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@mixin.dev/mixin-node-sdk": "^7.5.2",
+    "uuid": "^11"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "mixin-oauth-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@mixin.dev/mixin-node-sdk": "^7.5.2",
+    "pako": "^2.1.0",
+    "uuid": "^11.1.1",
+    "ws": "^8.20.0"
+  }
+}

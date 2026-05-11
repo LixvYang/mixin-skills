@@ -60,11 +60,13 @@ memo   := bot.EncodeOperationMemo(bot.OperationTypeSystemCall, sys)
 extra  := bot.EncodeMtgExtra(info.Members.AppId, memo)
 ```
 
-Node.js equivalents (encoding only) live in `@mixin.dev/mixin-node-sdk` utils:
+Node.js equivalents live in `@mixin.dev/mixin-node-sdk` (main export):
 
 ```js
-const { buildComputerExtra, buildSystemCallExtra, encodeMtgExtra, checkSystemCallSize, OperationTypeAddUser, OperationTypeSystemCall } =
-  require('@mixin.dev/mixin-node-sdk/dist/client/utils');
+import {
+  buildComputerExtra, buildSystemCallExtra, encodeMtgExtra, checkSystemCallSize,
+  OperationTypeAddUser, OperationTypeSystemCall,
+} from "@mixin.dev/mixin-node-sdk";
 
 // OperationTypeAddUser: payload is UTF-8 MIX address bytes
 const memo = buildComputerExtra(OperationTypeAddUser, Buffer.from(mixAddr, 'utf8'));
@@ -98,11 +100,12 @@ Computer interfaces don't accept a raw Mixin `user_id` UUID. The corresponding 1
 
 | Endpoint | SDK helper | Returns |
 |---|---|---|
-| `GET /` | `bot.GetComputerInfo(ctx)` | observer, payer, MTG `app_id`, `members`, `threshold`, operation asset + price |
-| `GET /users/:id` | `bot.GetComputerUser(ctx, address)` | `{uid, mix, solana_address}` |
-| `GET /assets` | `bot.GetComputerDeployedAssets(ctx)` | deployed Solana asset table; each entry exposes `GetSolanaAssetId()` derived as `UniqueObjectId(SolanaChainId, asset.address)` |
-| `GET /system_calls/:id` | `bot.GetComputerSystemCall(ctx, callID)` | call status, hash, error, sub-calls |
-| `GET /fees/sol/:amount` | `bot.GetFeeOnXINBasedOnSOL(ctx, solAmount)` | fee in XIN, `fee_id` |
+| `GET /` | `bot.GetComputerInfo(ctx)` | `{observer, payer, height, version, members, params.operation}` |
+| `GET /users/:id` | `bot.GetComputerUser(ctx, address)` | `{id, mix_address, chain_address}` or `nil` (404) |
+| `GET /deployed_assets` | `bot.GetComputerDeployedAssets(ctx)` | `[{asset_id, chain_id, address, name, symbol, decimals, price_usd, uri}]` |
+| `GET /system_calls/:id` | `bot.GetComputerSystemCall(ctx, callID)` | `{id, type, user_id, nonce_account, raw, state, hash, reason, subs[]}` |
+| `POST /fee` | `bot.GetFeeOnXINBasedOnSOL(ctx, solAmount)` | `{fee_id, xin_amount}` |
+| `POST /nonce_accounts` | `bot.LockComputerNonceAccount(ctx, mix)` | `{mix, nonce_address, nonce_hash}` |
 
 ```go
 info, _ := bot.GetComputerInfo(ctx)
@@ -453,16 +456,87 @@ A locked nonce account is consumed by exactly one system call. Lock immediately 
 - Round-trip the operation extra: `EncodeOperationMemo` → decode (the first byte is type, the rest is payload) → assert payload re-parses cleanly into the original fields.
 - Register on a test bot first; addresses, nonce accounts, and deployed assets are append-only.
 
+## Helper scripts
+
+All scripts live in `skills/mixin-computer/scripts/`. Install deps first:
+
+```bash
+npm install
+```
+
+### Read-only (no keystore)
+
+```bash
+# Query Computer info — payer, MTG members, operation price
+node skills/mixin-computer/scripts/computer-info.mjs
+
+# Look up a Computer user by MIX address
+node skills/mixin-computer/scripts/computer-user.mjs --address=MIX_ADDRESS
+
+# Quote XIN fee for a SOL amount
+node skills/mixin-computer/scripts/query-fees.mjs --sol=0.01
+
+# List assets deployed on Solana via Computer
+node skills/mixin-computer/scripts/query-assets.mjs
+
+# Check system call status
+node skills/mixin-computer/scripts/query-system-call.mjs --id=CALL_UUID
+# Poll until done:
+node skills/mixin-computer/scripts/query-system-call.mjs --id=CALL_UUID --watch
+```
+
+### Registration (keystore required)
+
+```bash
+# Register a bot as a Computer user (pays XIN from bot balance)
+node skills/mixin-computer/scripts/register-computer.mjs --config=keystore.json
+
+# Keystore can also be passed via env vars:
+#   MIXIN_APP_ID MIXIN_SESSION_ID MIXIN_PRIVATE_KEY
+#   MIXIN_SERVER_PUBLIC_KEY MIXIN_SPEND_KEY
+```
+
+### System call (keystore required)
+
+```bash
+# Submit a minimal system call (nonce advance + memo instruction).
+# Demonstrates the full invoice flow: storage entry + system-call entry.
+node skills/mixin-computer/scripts/submit-system-call.mjs \
+  --config=keystore.json \
+  --mix=MIX_ADDRESS_FROM_REGISTER_OUTPUT
+
+# Optionally set Solana RPC endpoint (defaults to mainnet-beta):
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com \
+  node skills/mixin-computer/scripts/submit-system-call.mjs ...
+```
+
+### Usage patterns
+
+The scripts demonstrate three practical Computer workflows:
+
+**1. Registration** — `register-computer.mjs`: fetch Computer info → derive 1-of-1 MIX address → check if already registered → build AddUser extra → verify XIN balance → send Safe transaction to Computer MTG → poll for confirmation.
+
+**2. System call** — `submit-system-call.mjs`: fetch info + Computer user → lock nonce → build Solana tx → quote fee (if SOL needed) → build Mixin invoice (storage entry + system-call entry) → submit entries in order with UTXO-change retry → poll `GET /system_calls/:id` until confirmed. The `lib/invoice.mjs` helper handles the ordered payment and reference resolution.
+
+**3. Fee quoting** — always call `POST /fee` before a system call that allocates new Solana accounts (rent). The returned `fee_id` is passed to `buildSystemCallExtra`. Omit when the Computer authority already has enough SOL.
+
+For real-world system call submission (the third layer), see the `fluxor_earn2` project's scripts:
+
+- [`init-marginfi-account.ts`](https://github.com/rebetxin/fluxor_earn2/blob/main/scripts/init-marginfi-account.ts) — build a Solana tx, fetch nonce, inject nonce advance, quote rent SOL, build invoice with storage + fee entries, submit and poll.
+- [`p0-deposit.ts`](https://github.com/rebetxin/fluxor_earn2/blob/main/scripts/p0-deposit.ts) — asset deposit through Computer with token account rent top-up.
+- [`p0-withdraw.ts`](https://github.com/rebetxin/fluxor_earn2/blob/main/scripts/p0-withdraw.ts) — withdrawal with oracle refresh tx filtering and multi-tx submission.
+
+These use shared lib modules (`computer-api.ts`, `safe-tx.ts`, `computer-system-call.ts`) that the `.mjs` scripts in this skill mirror as `lib/computer-api.mjs`, `lib/safe-tx.mjs`.
+
 ## Reference
 
 - `github.com/MixinNetwork/bot-api-go-client/v3/computer.go` — all the helpers above (`OperationTypeAddUser`, `OperationTypeSystemCall`, `OperationTypeUserDeposit`, `EncodeOperationMemo`, `EncodeMtgExtra`, `BuildSystemCallExtra`, `RegisterComputer`, `GetComputerInfo`, `GetComputerUser`, `GetComputerDeployedAssets`, `GetComputerSystemCall`, `GetFeeOnXINBasedOnSOL`, `ComputerDeployExternalAsset`, `LockComputerNonceAccount`, `ComputerUserIDToBytes`).
-- `MixinNetwork/bot-api-nodejs-client/src/client/utils/computer.ts` — Node.js encoding helpers (`OperationTypeAddUser`, `OperationTypeSystemCall`, `OperationTypeUserDeposit`, `MAX_SOLANA_TX_SIZE`, `checkSystemCallSize`, `userIdToBytes`, `buildSystemCallExtra`, `buildComputerExtra`, `encodeMtgExtra`).
+- `@mixin.dev/mixin-node-sdk` — Node.js encoding helpers and invoice utilities: `OperationTypeAddUser`, `OperationTypeSystemCall`, `OperationTypeUserDeposit`, `checkSystemCallSize`, `userIdToBytes`, `buildSystemCallExtra`, `buildComputerExtra`, `encodeMtgExtra`, `newMixinInvoice`, `attachStorageEntry`, `attachInvoiceEntry`, `isStorageEntry`, `getRecipientForStorage`, `estimateStorageCost`, `getInvoiceString`.
 - `github.com/MixinNetwork/computer` — full MTG-side runtime; the canonical reference for what a Computer node actually does with these extras.
 - https://mvm.dev/register — Computer registration UI documentation.
 
 ## Related skills
 
-- [`mixin-safe-transactions`](../mixin-safe-transactions/SKILL.md) — underlying UTXO + ghost key + raw tx flow used to send extras to the MTG.
-- [`mixin-mix-address`](../mixin-mix-address/SKILL.md) — MIX address derivation, MTG extra encoding, object-storage entry pattern.
+- [`mixin-safe`](../mixin-safe/SKILL.md) — Safe UTXO flow, MIX address derivation, MTG extra encoding, storage entry pattern.
 - [`mixin-mtg-multisig`](../mixin-mtg-multisig/SKILL.md) — what runs on the other side of the MTG, if you want to understand or implement a Computer-style worker.
-- [`mixin-kit-go`](../mixin-kit-go/SKILL.md) — the kit's `ComputerClient` is a thin wrapper around the same public endpoints; use the kit when your project already does.
+- [`mixin-bot`](../mixin-bot/SKILL.md) — the kit wrapper (`mixin-kit-go`) that includes a simple Computer HTTP client.

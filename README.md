@@ -31,17 +31,11 @@ npx skills add LixvYang/mixin-skills --all -g -a claude-code
 | Skill | Trigger Keywords | Description |
 |-------|------------------|-------------|
 | [`mixin-architecture`](skills/mixin-architecture/SKILL.md) | mixin sdk, SafeUser, keystore, bot api | High-level SDK and protocol overview |
-| [`mixin-keystore`](skills/mixin-keystore/SKILL.md) | keystore, SafeUser, MixinApi, app_id, session_id, server_public_key, spend_private_key, JWT auth | Load credentials and construct the SDK client |
-| [`mixin-messaging`](skills/mixin-messaging/SKILL.md) | sendText, sendPost, AppCard, AppButton, message_id idempotency | Direct, group, rich messages and idempotency |
-| [`mixin-blaze`](skills/mixin-blaze/SKILL.md) | Blaze, WebSocket, blaze.loop, BlazeListener, OnMessage, OnAckReceipt | Long-lived bot socket loop |
-| [`mixin-conversations`](skills/mixin-conversations/SKILL.md) | conversation, group create, add/remove participant, SYSTEM_CONVERSATION, search user | Conversations, participants, system events |
-| [`mixin-safe-transactions`](skills/mixin-safe-transactions/SKILL.md) | Safe, UTXO, ghost key, raw transaction, MixAddress, multisig, sign/unlock/cancel | Safe (UTXO) transfers and multisig flows |
-| [`mixin-withdrawals`](skills/mixin-withdrawals/SKILL.md) | withdrawal, fee, deposit entry, address book, MixinCashier | On-chain withdrawal, fee output, deposit, address book |
-| [`mixin-mix-address`](skills/mixin-mix-address/SKILL.md) | MIX address, MIN invoice, MTG extra, mixin:// scheme | Address encoding, invoices, URL schemes |
-| [`mixin-network-assets`](skills/mixin-network-assets/SKILL.md) | asset, snapshot, network ticker, top assets, asset search | Public asset/snapshot/ticker APIs |
+| [`mixin-bot`](skills/mixin-bot/SKILL.md) | keystore, SafeUser, MixinApi, session/spend key, JWT auth, message, sendText, AppCard, Blaze, WebSocket, blaze.loop, conversation, group, search user, bare user, TIP PIN, kit-go, ClientWrapper, Web3, Route | Core bot development — keystore loading, messaging, Blaze WebSocket, conversations, kit wrapper |
+| [`mixin-safe`](skills/mixin-safe/SKILL.md) | Safe, UTXO, ghost key, raw transaction, MixAddress, multisig, withdrawal, fee, MixinCashier, deposit, address book, asset, snapshot, ticker, MIX address, MIN invoice, MTG extra, mixin:// URL, storage entry | Safe UTXO transfers, withdrawals, asset queries, address encoding |
 | [`mixin-computer`](skills/mixin-computer/SKILL.md) | Mixin Computer, MVM, OperationTypeAddUser, OperationTypeSystemCall, RegisterComputer, GetComputerInfo, system call, nonce account | Public Computer client (Go) + AddUser / SystemCall extras (Go + Node.js encoding utils) |
 | [`mixin-mtg-multisig`](skills/mixin-mtg-multisig/SKILL.md) | MTG, mtg.Group, observer, signer, FROST, multi-party-sig, replay check | MTG programs, observer/signer, MPC sessions (Go) |
-| [`mixin-kit-go`](skills/mixin-kit-go/SKILL.md) | mixin-kit-go, ClientWrapper, TransferOne, TransferMany, Web3Quote, Web3Swap, ComputerClient | DomeLiquid kit wrapper (Go) |
+| [`mixin-oauth`](skills/mixin-oauth/SKILL.md) | oauth, mixin login, authorize, PKCE, client_secret, OAuthGetAccessToken, OAuthKeystore, mixin://codes, scope, identity provider | User login via Mixin OAuth — frontend PKCE (no secret) and backend client_secret flows |
 
 ## Mixin Key Concepts
 
@@ -57,6 +51,30 @@ keystore.json
 ```
 
 The `app_id` is also the bot's `user_id`. A bot is just a user with extra fields.
+
+### Keystore JSON format
+
+A bot keystore is a JSON file exported from [developers.mixin.one](https://developers.mixin.one) or constructed manually:
+
+```json
+{
+  "app_id": "uuid",
+  "session_id": "uuid",
+  "server_public_key": "hex",
+  "session_private_key": "hex",
+  "spend_private_key": "hex"
+}
+```
+
+**Field aliases** accepted by scripts:
+
+| Standard name | Alias | Used in |
+|--------------|-------|---------|
+| `app_id` | `client_id` | OAuth responses |
+| `session_private_key` | `private_key` | some older exports |
+| `spend_private_key` | `spend_key` | env var `MIXIN_SPEND_KEY` |
+
+Scripts accept keystore via `--config=keystore.json` (file path) or individual env vars (`MIXIN_APP_ID`, `MIXIN_SESSION_ID`, `MIXIN_PRIVATE_KEY`, `MIXIN_SERVER_PUBLIC_KEY`, `MIXIN_SPEND_KEY`).
 
 ### API surface
 
@@ -108,20 +126,58 @@ mixin-skills/
 ├── package.json                      # enables npx skills add
 └── skills/
     ├── mixin-architecture/SKILL.md   # router / overview
-    ├── mixin-keystore/SKILL.md
-    ├── mixin-messaging/SKILL.md
-    ├── mixin-blaze/SKILL.md
-    ├── mixin-conversations/SKILL.md
-    ├── mixin-safe-transactions/SKILL.md
-    ├── mixin-withdrawals/SKILL.md
-    ├── mixin-mix-address/SKILL.md
-    ├── mixin-network-assets/SKILL.md
-    ├── mixin-computer/SKILL.md
-    ├── mixin-mtg-multisig/SKILL.md
-    └── mixin-kit-go/SKILL.md
+    ├── mixin-bot/
+    │   ├── SKILL.md                  # keystore + messaging + blaze + convs + kit
+    │   └── scripts/                  # ping, send-direct, blaze-echo
+    ├── mixin-safe/
+    │   ├── SKILL.md                  # safe txs + withdrawals + assets + address encoding
+    │   └── scripts/                  # safe-snapshots, safe-balance, mix-address, safe-transfer-all
+    ├── mixin-computer/
+    │   ├── SKILL.md
+    │   └── scripts/                  # computer-info, computer-user, query-fees, query-assets, query-system-call, register-computer, submit-system-call
+    ├── mixin-mtg-multisig/
+    │   ├── SKILL.md
+    │   └── scripts/                  # mtg-extra-encode, mtg-extra-decode
+    └── mixin-oauth/
+        ├── SKILL.md
+        └── scripts/                  # oauth-backend, oauth-frontend
 ```
 
-Most SKILL.md files cover both Go and Node.js. `mixin-mtg-multisig` and `mixin-kit-go` are Go-only. `mixin-computer` covers Go end-to-end, plus Node.js helpers for encoding Computer extras.
+Most SKILL.md files cover both Go and Node.js. `mixin-mtg-multisig` is Go-only. `mixin-bot` includes a Go-only section for the `mixin-kit-go` wrapper. `mixin-computer` covers Go end-to-end, plus Node.js helpers for encoding Computer extras.
+
+## Helper scripts
+
+Each skill with a `scripts/` directory has runnable demonstrations. Install deps first, then run:
+
+```bash
+# Bot — validate keystore, send messages, listen via Blaze
+node skills/mixin-bot/scripts/ping.mjs --config=keystore.json
+node skills/mixin-bot/scripts/send-direct.mjs --config=keystore.json --to=USER_ID --text="hello"
+node skills/mixin-bot/scripts/blaze-echo.mjs --config=keystore.json
+
+# Safe — check balances, list snapshots, transfer all assets
+node skills/mixin-safe/scripts/safe-balance.mjs --config=keystore.json
+node skills/mixin-safe/scripts/safe-snapshots.mjs --config=keystore.json --limit=10
+node skills/mixin-safe/scripts/safe-transfer-all.mjs --config=keystore.json --to=USER_ID --dry-run
+
+# Computer — read-only queries (no keystore)
+node skills/mixin-computer/scripts/computer-info.mjs
+node skills/mixin-computer/scripts/query-fees.mjs --sol=0.01
+node skills/mixin-computer/scripts/query-assets.mjs
+node skills/mixin-computer/scripts/query-system-call.mjs --id=CALL_UUID
+
+# Computer — registration + system call submission (keystore required)
+node skills/mixin-computer/scripts/register-computer.mjs --config=keystore.json
+node skills/mixin-computer/scripts/submit-system-call.mjs --config=keystore.json
+
+# MTG — encode/decode extras
+node skills/mixin-mtg-multisig/scripts/mtg-extra-encode.mjs --app=APP_ID --memo=hello
+node skills/mixin-mtg-multisig/scripts/mtg-extra-decode.mjs --extra=BASE64_RAW_URL
+
+# OAuth — backend + frontend flow demos
+node skills/mixin-oauth/scripts/oauth-backend.mjs --config=keystore.json --code=AUTH_CODE
+node skills/mixin-oauth/scripts/oauth-frontend.mjs
+```
 
 ## Source references
 

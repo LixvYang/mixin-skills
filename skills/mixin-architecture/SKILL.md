@@ -96,17 +96,11 @@ const me = await client.user.profile();
 
 | Goal | Skill |
 |------|-------|
-| Load `keystore.json`, build `SafeUser` / `MixinApi` | [`mixin-keystore`](../mixin-keystore/SKILL.md) |
-| Send text / post / app card; idempotency | [`mixin-messaging`](../mixin-messaging/SKILL.md) |
-| Long-running WebSocket bot | [`mixin-blaze`](../mixin-blaze/SKILL.md) |
-| Create / manage groups, search users | [`mixin-conversations`](../mixin-conversations/SKILL.md) |
-| Transfer assets via Safe (UTXO + ghost keys + raw tx) | [`mixin-safe-transactions`](../mixin-safe-transactions/SKILL.md) |
-| On-chain withdrawal, fee output, address book, deposit entry | [`mixin-withdrawals`](../mixin-withdrawals/SKILL.md) |
-| Encode/decode `MIX...` address, `MIN...` invoice, `mixin://` URL | [`mixin-mix-address`](../mixin-mix-address/SKILL.md) |
-| Asset / snapshot / network ticker queries | [`mixin-network-assets`](../mixin-network-assets/SKILL.md) |
+| Load keystore, send/receive messages, manage groups, Blaze loop, kit wrapper | [`mixin-bot`](../mixin-bot/SKILL.md) |
+| Safe transfers, withdrawals, asset queries, address encoding | [`mixin-safe`](../mixin-safe/SKILL.md) |
 | Mixin Computer (MVM): RegisterComputer, system calls, deployed assets | [`mixin-computer`](../mixin-computer/SKILL.md) — Go end-to-end, Node.js extra encoding helpers |
 | MTG group / observer / signer / FROST | [`mixin-mtg-multisig`](../mixin-mtg-multisig/SKILL.md) — Go only |
-| `mixin-kit-go` ClientWrapper / Web3 / Computer | [`mixin-kit-go`](../mixin-kit-go/SKILL.md) — Go only |
+| User login via Mixin OAuth | [`mixin-oauth`](../mixin-oauth/SKILL.md) |
 
 ## Universal safety rules
 

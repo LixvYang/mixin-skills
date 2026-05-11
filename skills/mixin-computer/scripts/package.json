@@ -1,0 +1,12 @@
+{
+  "name": "mixin-computer-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@mixin.dev/mixin-node-sdk": "^7.5.2",
+    "@solana/web3.js": "^1",
+    "bignumber.js": "^9",
+    "uuid": "^11"
+  }
+}

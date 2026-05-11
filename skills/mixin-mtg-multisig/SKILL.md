@@ -7,7 +7,7 @@ description: This skill should be used when designing, implementing, reviewing, 
 
 Use this skill for Mixin Safe **group programs** and **multi-party signing services**. It is based on patterns from `github.com/MixinNetwork/computer`, which combines `bot-api-go-client/v3`, `github.com/MixinNetwork/safe`, and `github.com/MixinNetwork/multi-party-sig`.
 
-For client code that only calls the public Mixin Computer HTTP API, use [`mixin-kit-go`](../mixin-kit-go/SKILL.md). For the underlying Safe transaction shape, use [`mixin-safe-transactions`](../mixin-safe-transactions/SKILL.md).
+For client code that only calls the public Mixin Computer HTTP API, use [`mixin-bot`](../mixin-bot/SKILL.md) (mixin-kit-go section). For the underlying Safe transaction shape, use [`mixin-safe`](../mixin-safe/SKILL.md).
 
 > **Go only.** There is no Node.js MTG implementation. Bots written in Node.js can *send* transactions to an MTG (using the Safe transaction flow) and *receive* outputs from one, but cannot run as an MTG node.
 
@@ -186,6 +186,16 @@ session, err := frost.Sign(party, signers, msgHash, store)
 - Test duplicate observer messages and duplicate signer messages.
 - Test insufficient-balance paths and retry trace IDs.
 - Test threshold boundary cases: too few members, threshold below quorum, missing prepared signer.
+
+## Helper scripts
+
+```bash
+# Encode an MTG operation extra (no auth needed)
+node skills/mixin-mtg-multisig/scripts/mtg-extra-encode.mjs --app=APP_ID --memo="hello"
+
+# Decode a base64 MTG extra back to app_id + memo
+node skills/mixin-mtg-multisig/scripts/mtg-extra-decode.mjs --extra="BASE64_EXTRA"
+```
 
 ## Reference
 

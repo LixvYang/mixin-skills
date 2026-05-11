@@ -1,0 +1,11 @@
+{
+  "name": "mixin-safe-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@mixin.dev/mixin-node-sdk": "^7.5.2",
+    "bignumber.js": "^9",
+    "uuid": "^11"
+  }
+}
