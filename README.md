@@ -1,8 +1,21 @@
-# Mixin Network Progressive Disclosure Skills
+# Mixin Network Skills
 
-Progressive disclosure skills for building on the [Mixin Network](https://developers.mixin.one/docs/api-overview). These skills provide context-aware guidance for the official **Go** and **Node.js** SDKs, plus the third-party `mixin-kit-go` wrapper and the MTG / Trusted Group programming model.
+Claude Code skills for building on the [Mixin Network](https://developers.mixin.one/docs/api-overview). These skills provide context-aware guidance for the official **Go** and **Node.js** SDKs, plus the third-party `mixin-kit-go` wrapper and the MTG / Trusted Group programming model.
 
 Each skill lives under `skills/<skill-name>/SKILL.md` and is loaded contextually when its trigger keywords appear in a conversation.
+
+## Installation
+
+```bash
+# browse and select interactively
+npx skills add LixvYang/mixin-skills
+
+# install a specific skill globally
+npx skills add LixvYang/mixin-skills --skill mixin-computer -g -a claude-code
+
+# install all skills globally
+npx skills add LixvYang/mixin-skills --all -g -a claude-code
+```
 
 ## SDK landscape
 
@@ -90,7 +103,9 @@ Every money operation, every multisig request, every Blaze message has a stable 
 
 ```
 mixin-skills/
-├── README.md                         # this file
+├── README.md
+├── CLAUDE.md                         # guidance for Claude Code
+├── package.json                      # enables npx skills add
 └── skills/
     ├── mixin-architecture/SKILL.md   # router / overview
     ├── mixin-keystore/SKILL.md

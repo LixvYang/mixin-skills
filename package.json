@@ -1,0 +1,12 @@
+{
+  "name": "mixin-skills",
+  "version": "0.1.0",
+  "description": "Claude Code skills for Mixin Network development",
+  "type": "module",
+  "keywords": ["claude-code", "skills", "mixin", "mixin-network", "blockchain", "web3"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LixvYang/mixin-skills"
+  },
+  "license": "MIT"
+}
